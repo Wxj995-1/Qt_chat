@@ -1,0 +1,9 @@
+[INFO][2026-07-26 15:10:58:003][140078576465664][/home/weng/7_chat/src/server/db/db.cpp:46]connect mysql success!
+[INFO][2026-07-26 15:10:58:003][140078576465664][/home/weng/7_chat/src/server/chatservice.cpp:94]user login: id=1
+[INFO][2026-07-26 15:10:58:012][140078576465664][/home/weng/7_chat/src/server/db/db.cpp:46]connect mysql success!
+[INFO][2026-07-26 15:10:58:039][140078576465664][/home/weng/7_chat/src/server/db/db.cpp:46]connect mysql success!
+[INFO][2026-07-26 15:10:58:050][140078576465664][/home/weng/7_chat/src/server/db/db.cpp:46]connect mysql success!
+[INFO][2026-07-26 15:10:58:059][140078576465664][/home/weng/7_chat/src/server/db/db.cpp:46]connect mysql success!
+[INFO][2026-07-26 15:10:58:077][140078576465664][/home/weng/7_chat/src/server/db/db.cpp:46]connect mysql success!
+[INFO][2026-07-26 15:11:00:806][140078621096448][/home/weng/7_chat/src/server/main.cpp:35]program recv signal[2] to exit.
+[INFO][2026-07-26 15:11:00:822][140078621096448][/home/weng/7_chat/src/server/db/db.cpp:46]connect mysql success!
