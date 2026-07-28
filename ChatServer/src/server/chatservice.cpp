@@ -164,7 +164,7 @@ void ChatService::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
         response["groups"] = groupV;
       }
 
-      conn->send(response.dump());
+      sendJson(conn, response);
       // 通知好友该用户上线
       notifyFriendState(id, "online");
     }
@@ -177,7 +177,7 @@ void ChatService::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
     response["msgid"] = LOGIN_MSG_ACK;
     response["errno"] = 1;
     response["errmsg"] = "id or password is invalid!";
-    conn->send(response.dump());
+    sendJson(conn, response);
   }
 }
 
@@ -199,7 +199,7 @@ void ChatService::reg(const TcpConnectionPtr &conn, json &js, Timestamp time)
     response["msgid"] = REG_MSG_ACK;
     response["errno"] = 0;
     response["id"] = user.getId();
-    conn->send(response.dump());
+    sendJson(conn, response);
   }
   else
   {
@@ -207,7 +207,7 @@ void ChatService::reg(const TcpConnectionPtr &conn, json &js, Timestamp time)
     json response;
     response["msgid"] = REG_MSG_ACK;
     response["errno"] = 1;
-    conn->send(response.dump());
+    sendJson(conn, response);
   }
 }
 
@@ -289,7 +289,7 @@ void ChatService::oneChat(const TcpConnectionPtr &conn, json &js, Timestamp time
     {
       LOGI("oneChat online: %d -> %d", fromid, toid);
       // toid在线，转发消息   服务器主动推送消息给toid用户
-      it->second->send(js.dump());
+      sendJson(it->second, js);
       return;
     }
   }
@@ -326,7 +326,7 @@ void ChatService::addFriend(const TcpConnectionPtr &conn, json &js, Timestamp ti
   response["id"] = friendUser.getId();
   response["name"] = friendUser.getName();
   response["state"] = friendUser.getState();
-  conn->send(response.dump());
+  sendJson(conn, response);
 }
 
 // 创建群组业务
@@ -350,7 +350,7 @@ void ChatService::createGroup(const TcpConnectionPtr &conn, json &js, Timestamp 
     response["groupid"] = group.getId();
     response["groupname"] = group.getName();
     response["groupdesc"] = group.getDesc();
-    conn->send(response.dump());
+    sendJson(conn, response);
   }
 }
 
@@ -369,7 +369,7 @@ void ChatService::addGroup(const TcpConnectionPtr &conn, json &js, Timestamp tim
   response["msgid"] = ADD_GROUP_MSG;
   response["groupid"] = group.getId();
   response["groupname"] = group.getName();
-  conn->send(response.dump());
+  sendJson(conn, response);
 }
 
 // 修改名字业务
@@ -393,7 +393,7 @@ void ChatService::updateName(const TcpConnectionPtr &conn, json &js, Timestamp t
     response["errno"] = 1;
     response["errmsg"] = "Name already exists";
   }
-  conn->send(response.dump());
+  sendJson(conn, response);
 }
 
 // 群组聊天业务
@@ -410,7 +410,7 @@ void ChatService::groupChat(const TcpConnectionPtr &conn, json &js, Timestamp ti
     if (it != _userConnMap.end())
     {
       // 转发群消息
-      it->second->send(js.dump());
+      sendJson(it->second, js);
     }
     else
     {
@@ -437,7 +437,7 @@ void ChatService::handleRedisSubscribeMessage(int userid, string msg)
   auto it = _userConnMap.find(userid);
   if (it != _userConnMap.end())
   {
-    it->second->send(msg);
+    sendJson(it->second, json::parse(msg));
     return;
   }
 
@@ -461,9 +461,18 @@ void ChatService::notifyFriendState(int userid, const string &state)
     auto it = _userConnMap.find(fid);
     if (it != _userConnMap.end())
     {
-      it->second->send(notify.dump());
+      sendJson(it->second, notify);
     }
   }
+}
+
+void ChatService::sendJson(const TcpConnectionPtr &conn, const json &js)
+{
+  string body = js.dump();
+  uint32_t len = htonl((uint32_t)body.size());
+  string packet((char*)&len, 4);
+  packet += body;
+  conn->send(packet);
 }
 
 void ChatService::updateConnTime(const TcpConnectionPtr &conn)
@@ -476,7 +485,7 @@ void ChatService::heartbeat(const TcpConnectionPtr &conn, json &js, Timestamp ti
 {
   json response;
   response["msgid"] = HEARTBEAT_MSG;
-  conn->send(response.dump());
+  sendJson(conn, response);
 }
 
 void ChatService::startHeartbeatCheck(EventLoop *loop)

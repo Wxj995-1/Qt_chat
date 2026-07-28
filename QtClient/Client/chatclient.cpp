@@ -250,48 +250,25 @@ void ChatClient::onReadyRead()
     m_recvBuf.append(m_socket->readAll());
     m_lastDataTime = time(NULL);
 
-    while (true)
+    while (m_recvBuf.size() >= 4)
     {
-        int braceDepth = 0;
-        int endIdx = -1;
-        bool inString = false;
-
-        for (int i = 0; i < m_recvBuf.size(); ++i)
-        {
-            char c = m_recvBuf[i];
-            if (c == '"')
-            {
-                int bs = 0;
-                for (int j = i - 1; j >= 0 && m_recvBuf[j] == '\\'; --j)
-                    ++bs;
-                if (bs % 2 == 0)
-                    inString = !inString;
-            }
-            if (!inString)
-            {
-                if (c == '{') ++braceDepth;
-                else if (c == '}') {
-                    --braceDepth;
-                    if (braceDepth == 0) {
-                        endIdx = i + 1;
-                        break;
-                    }
-                }
-            }
+        uint32_t len = qFromBigEndian<uint32_t>(
+            *reinterpret_cast<const uint32_t*>(m_recvBuf.constData()));
+        if (len == 0 || len > 1024 * 1024) {
+            m_recvBuf.clear();
+            break;
         }
-
-        if (endIdx <= 0)
+        if (m_recvBuf.size() < 4 + len)
             break;
 
-        QByteArray jsonBytes = m_recvBuf.left(endIdx);
-        m_recvBuf = m_recvBuf.mid(endIdx);
+        QByteArray jsonBytes = m_recvBuf.mid(4, len);
+        m_recvBuf.remove(0, 4 + len);
 
         QJsonParseError err;
         QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &err);
-        if (err.error != QJsonParseError::NoError)
-        {
-            m_recvBuf.clear();
-            break;
+        if (err.error != QJsonParseError::NoError) {
+            qWarning() << "[ChatClient] JSON parse error:" << err.errorString();
+            continue;
         }
 
         QJsonObject obj = doc.object();

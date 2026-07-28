@@ -43,6 +43,7 @@ public:
   void startHeartbeatCheck(EventLoop *loop);
   void stopHeartbeatCheck();
   void updateConnTime(const TcpConnectionPtr &conn);
+  void sendJson(const TcpConnectionPtr &conn, const json &js);
 
 private:
   ChatService();
