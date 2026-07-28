@@ -481,11 +481,14 @@ void ChatService::heartbeat(const TcpConnectionPtr &conn, json &js, Timestamp ti
 
 void ChatService::startHeartbeatCheck(EventLoop *loop)
 {
-  loop->runEvery(15.0, std::bind(&ChatService::checkHeartbeat, this));
+  _loop = loop;
+  _heartbeatTimerId = loop->runEvery(15.0, std::bind(&ChatService::checkHeartbeat, this));
 }
 
 void ChatService::stopHeartbeatCheck()
 {
+  if (_loop)
+    _loop->cancel(_heartbeatTimerId);
 }
 
 void ChatService::checkHeartbeat()

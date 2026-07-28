@@ -50,6 +50,9 @@ private:
   ChatService &operator=(const ChatService &) = delete;
   void checkHeartbeat();
 
+  muduo::net::EventLoop *_loop = nullptr;
+  muduo::net::TimerId _heartbeatTimerId;
+
   unordered_map<int, MsgHandler> _msgHandlerMap;
   unordered_map<int, TcpConnectionPtr> _userConnMap;
   mutex _connMutex;
