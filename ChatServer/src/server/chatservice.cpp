@@ -502,25 +502,30 @@ void ChatService::stopHeartbeatCheck()
 
 void ChatService::checkHeartbeat()
 {
-  lock_guard<mutex> lock(_connMutex);
-  time_t now = time(NULL);
-  auto it = _connectionLastTime.begin();
-  while (it != _connectionLastTime.end())
+  vector<TcpConnectionPtr> toClose;
+
   {
-    if (now - it->second <= 30)
+    lock_guard<mutex> lock(_connMutex);
+    time_t now = time(NULL);
+    for (auto &kv : _connectionLastTime)
     {
-      ++it;
-      continue;
-    }
-    LOGE("heartbeat timeout, force close connection: %s", it->first.c_str());
-    for (auto &uc : _userConnMap)
-    {
-      if (uc.second->name() == it->first)
+      if (now - kv.second > 30)
       {
-        uc.second->shutdown();
-        break;
+        for (auto &uc : _userConnMap)
+        {
+          if (uc.second->name() == kv.first)
+          {
+            toClose.push_back(uc.second);
+            break;
+          }
+        }
       }
     }
-    it = _connectionLastTime.erase(it);
+  }
+
+  for (auto &conn : toClose)
+  {
+    LOGE("heartbeat timeout, force close connection: %s", conn->name().c_str());
+    conn->shutdown();
   }
 }
