@@ -495,6 +495,14 @@ void ChatService::handleRedisSubscribeMessage(int userid, string msg)
     return;
   }
 
+  // 好友状态通知为瞬态消息，离线时丢弃（登录后从 DB 查询当前状态即可）
+  json parsed;
+  try { parsed = json::parse(msg); } catch (...) {}
+  if (parsed.is_object() && parsed.contains("msgid") && parsed["msgid"].get<int>() == FRIEND_STATE_CHANGE_MSG)
+  {
+    return;
+  }
+
   // 存储该用户的离线消息
   _offlineMsgModel.insert(userid, msg);
 }
@@ -508,15 +516,28 @@ void ChatService::notifyFriendState(int userid, const string &state)
   notify["friendid"] = userid;
   notify["state"] = state;
 
-  lock_guard<mutex> lock(_connMutex);
-  for (User &friendUser : friends)
+  vector<int> crossIds;
   {
-    int fid = friendUser.getId();
-    auto it = _userConnMap.find(fid);
-    if (it != _userConnMap.end())
+    lock_guard<mutex> lock(_connMutex);
+    for (User &friendUser : friends)
     {
-      sendJson(it->second, notify);
+      int fid = friendUser.getId();
+      auto it = _userConnMap.find(fid);
+      if (it != _userConnMap.end())
+      {
+        sendJson(it->second, notify);
+      }
+      else
+      {
+        crossIds.push_back(fid);
+      }
     }
+  }
+
+  // 通知跨服好友（发布到 Redis 通道，由对方服务器转发）
+  for (int fid : crossIds)
+  {
+    _redis.publish(fid, notify.dump());
   }
 }
 
