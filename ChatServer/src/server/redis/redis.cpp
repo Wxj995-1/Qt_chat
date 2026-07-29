@@ -24,17 +24,35 @@ bool Redis::connect()
 {
     // 负责publish发布消息的上下文连接
     _publish_context = redisConnect("127.0.0.1", 6379);
-    if (nullptr == _publish_context)
+    if (_publish_context == nullptr || _publish_context->err != 0)
     {
-        cerr << "connect redis failed!" << endl;
+        if (_publish_context != nullptr)
+        {
+            cerr << "connect redis failed: " << _publish_context->errstr << endl;
+            redisFree(_publish_context);
+            _publish_context = nullptr;
+        }
+        else
+        {
+            cerr << "connect redis failed: can't allocate context" << endl;
+        }
         return false;
     }
 
     // 负责subscribe订阅消息的上下文连接
     _subcribe_context = redisConnect("127.0.0.1", 6379);
-    if (nullptr == _subcribe_context)
+    if (_subcribe_context == nullptr || _subcribe_context->err != 0)
     {
-        cerr << "connect redis failed!" << endl;
+        if (_subcribe_context != nullptr)
+        {
+            cerr << "connect redis failed: " << _subcribe_context->errstr << endl;
+            redisFree(_subcribe_context);
+            _subcribe_context = nullptr;
+        }
+        else
+        {
+            cerr << "connect redis failed: can't allocate context" << endl;
+        }
         return false;
     }
 
