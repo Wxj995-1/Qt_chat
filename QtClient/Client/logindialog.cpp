@@ -11,7 +11,7 @@ LoginDialog::LoginDialog(ChatClient *client, QWidget *parent)
     : QDialog(parent), m_client(client)
 {
     setWindowTitle("Chat Login");
-    setFixedSize(420, 540);
+    setFixedSize(420, 580);
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     m_retryTimeout = new QTimer(this);
@@ -84,11 +84,13 @@ void LoginDialog::setupUI()
     m_loginId = new QLineEdit;
     m_loginId->setPlaceholderText("User ID");
     m_loginId->setObjectName("input");
+    m_loginId->setFixedHeight(40);
 
     m_loginPwd = new QLineEdit;
     m_loginPwd->setPlaceholderText("Password");
     m_loginPwd->setEchoMode(QLineEdit::Password);
     m_loginPwd->setObjectName("input");
+    m_loginPwd->setFixedHeight(40);
 
     m_loginBtn = new QPushButton("Log In");
     m_loginBtn->setObjectName("primaryBtn");
@@ -100,10 +102,16 @@ void LoginDialog::setupUI()
     m_loginStatus->setAlignment(Qt::AlignCenter);
     m_loginStatus->setWordWrap(true);
 
+    m_cancelBtn = new QPushButton("Cancel");
+    m_cancelBtn->setObjectName("cancelBtn");
+    m_cancelBtn->setFixedHeight(36);
+    m_cancelBtn->setVisible(false);
+
     cl->addWidget(m_loginId);
     cl->addWidget(m_loginPwd);
     cl->addWidget(m_loginBtn);
     cl->addWidget(m_loginStatus);
+    cl->addWidget(m_cancelBtn);
 
     cl->addSpacing(8);
     QLabel *sep = new QLabel("\u2500 or \u2500");
@@ -115,11 +123,13 @@ void LoginDialog::setupUI()
     m_regName = new QLineEdit;
     m_regName->setPlaceholderText("New username");
     m_regName->setObjectName("input");
+    m_regName->setFixedHeight(40);
 
     m_regPwd = new QLineEdit;
     m_regPwd->setPlaceholderText("New password");
     m_regPwd->setEchoMode(QLineEdit::Password);
     m_regPwd->setObjectName("input");
+    m_regPwd->setFixedHeight(40);
 
     m_regBtn = new QPushButton("Create Account");
     m_regBtn->setObjectName("secondaryBtn");
@@ -140,6 +150,7 @@ void LoginDialog::setupUI()
     connect(m_loginBtn, &QPushButton::clicked, this, &LoginDialog::onLoginClicked);
     connect(m_loginPwd, &QLineEdit::returnPressed, this, &LoginDialog::onLoginClicked);
     connect(m_regBtn, &QPushButton::clicked, this, &LoginDialog::onRegisterClicked);
+    connect(m_cancelBtn, &QPushButton::clicked, this, &LoginDialog::onCancelClicked);
 }
 
 void LoginDialog::setupStyle()
@@ -181,6 +192,11 @@ void LoginDialog::setupStyle()
             font-size: 12px; padding: 2px 6px;
         }
         #serverBtn:hover { color: #667eea; }
+        #cancelBtn {
+            background: transparent; color: #999; border: 1px solid #ddd;
+            border-radius: 6px; font-size: 13px;
+        }
+        #cancelBtn:hover { color: #e74c3c; border-color: #e74c3c; }
     )");
 }
 
@@ -227,6 +243,16 @@ void LoginDialog::onRegisterClicked()
         m_client->connectToServer(m_client->serverIp(), m_client->serverPort());
     else
         m_client->reg(m_pendingRegName, m_pendingRegPwd);
+}
+
+void LoginDialog::onCancelClicked()
+{
+    m_retryTimeout->stop();
+    m_client->loginout();
+    m_pending = None;
+    setInputsEnabled(true);
+    m_loginStatus->setText("");
+    m_regStatus->setText("");
 }
 
 void LoginDialog::onConnected()
@@ -318,4 +344,5 @@ void LoginDialog::setInputsEnabled(bool enabled)
 {
     m_loginBtn->setEnabled(enabled);
     m_regBtn->setEnabled(enabled);
+    m_cancelBtn->setVisible(!enabled);
 }

@@ -25,6 +25,7 @@ public:
 private slots:
     void onLoginClicked();
     void onRegisterClicked();
+    void onCancelClicked();
     void onConnected();
     void onLoginSuccess(int id, const QString &name,
                         const QJsonArray &friends,
@@ -66,6 +67,7 @@ private:
 
     QTimer *m_retryTimeout;
     QPushButton *m_serverBtn;
+    QPushButton *m_cancelBtn;
 };
 
 #endif
