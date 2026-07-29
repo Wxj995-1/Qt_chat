@@ -537,6 +537,7 @@ void ChatService::updateConnTime(const TcpConnectionPtr &conn)
 
 void ChatService::heartbeat(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  updateConnTime(conn);
   json response;
   response["msgid"] = HEARTBEAT_MSG;
   sendJson(conn, response);
