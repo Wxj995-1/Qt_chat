@@ -171,14 +171,9 @@ void Redis::observer_channel_message()
     while (_running)
     {
         redisReply *reply = nullptr;
-        int ret = REDIS_ERR;
-        {
-            lock_guard<mutex> lock(_subscribeMutex);
-
-            ret = redisGetReply(this->_subcribe_context, (void **)&reply);
-            if (!_running)
-                break;
-        }
+        int ret = redisGetReply(this->_subcribe_context, (void **)&reply);
+        if (!_running)
+            break;
 
         if (ret != REDIS_OK)
         {
