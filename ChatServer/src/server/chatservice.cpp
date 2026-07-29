@@ -434,29 +434,44 @@ void ChatService::groupChat(const TcpConnectionPtr &conn, json &js, Timestamp ti
   int groupid = js["groupid"].get<int>();
   vector<int> useridVec = _groupModel.queryGroupUsers(userid, groupid);
 
-  lock_guard<mutex> lock(_connMutex);
-  for (int id : useridVec)
+  vector<int> offlineIds;
+  vector<int> crossIds;
+
   {
-    auto it = _userConnMap.find(id);
-    if (it != _userConnMap.end())
+    lock_guard<mutex> lock(_connMutex);
+    for (int id : useridVec)
     {
-      // 转发群消息
-      sendJson(it->second, js);
-    }
-    else
-    {
-      // 查询toid是否在线
-      User user = _userModel.query(id);
-      if (user.getState() == "online")
+      auto it = _userConnMap.find(id);
+      if (it != _userConnMap.end())
       {
-        _redis.publish(id, js.dump());
+        // 本服务器在线 → 直接转发
+        sendJson(it->second, js);
       }
       else
       {
-        // 存储离线群消息
-        _offlineMsgModel.insert(id, js.dump());
+        // 暂存到离线列表，后续判断是跨服还是真离线
+        offlineIds.push_back(id);
       }
     }
+  }
+
+  // 锁外处理：MySQL 查询 + Redis publish + 离线消息存储
+  for (int id : offlineIds)
+  {
+    User user = _userModel.query(id);
+    if (user.getState() == "online")
+    {
+      crossIds.push_back(id);
+    }
+    else
+    {
+      _offlineMsgModel.insert(id, js.dump());
+    }
+  }
+
+  for (int id : crossIds)
+  {
+    _redis.publish(id, js.dump());
   }
 }
 
