@@ -101,6 +101,7 @@ private:
     QString m_serverIp;
     quint16 m_serverPort;
     bool m_intentionalDisconnect = false;
+    bool m_wantRelogin = false;
     QByteArray m_recvBuf;
     time_t m_lastDataTime = 0;
     int m_myId = -1;

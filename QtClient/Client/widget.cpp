@@ -121,7 +121,11 @@ Widget::Widget(ChatClient *client, int myId, const QString &name,
     m_userLabel->installEventFilter(this);
 }
 
-Widget::~Widget() {}
+Widget::~Widget()
+{
+    // m_client 生命周期长于 Widget，断开所有信号避免 use-after-free
+    disconnect(m_client, nullptr, this, nullptr);
+}
 
 void Widget::closeEvent(QCloseEvent *event)
 {

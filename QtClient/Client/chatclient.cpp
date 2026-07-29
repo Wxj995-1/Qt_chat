@@ -86,7 +86,9 @@ void ChatClient::sendJson(const QJsonObject &obj)
 void ChatClient::login(int id, const QString &pwd)
 {
     qDebug() << "[ChatClient] login - id:" << id;
+    m_myId = id;
     m_password = pwd;
+    m_wantRelogin = true;
     QJsonObject obj;
     obj["msgid"] = LOGIN_MSG;
     obj["id"] = id;
@@ -168,6 +170,7 @@ void ChatClient::updateName(int id, const QString &newName)
 void ChatClient::loginout()
 {
     m_intentionalDisconnect = true;
+    m_wantRelogin = false;
     m_reconnectTimer->stop();
     m_loginTimeoutTimer->stop();
     m_heartbeatTimer->stop();
@@ -184,6 +187,7 @@ void ChatClient::resetLoginState()
 {
     m_myId = -1;
     m_password.clear();
+    m_wantRelogin = false;
 }
 
 void ChatClient::sendHeartbeat()
@@ -223,6 +227,7 @@ void ChatClient::relogin()
     if (m_myId > 0 && !m_password.isEmpty())
     {
         m_intentionalDisconnect = false;
+        m_wantRelogin = true;
         m_socket->abort();
         connectToServer(m_host, m_port);
     }
@@ -233,7 +238,7 @@ void ChatClient::onConnected()
     qDebug() << "[ChatClient] onConnected - m_myId:" << m_myId << "m_password.isEmpty():" << m_password.isEmpty();
     m_reconnectTimer->stop();
     m_intentionalDisconnect = false;
-    if (m_myId > 0 && !m_password.isEmpty())
+    if (m_wantRelogin)
     {
         qDebug() << "[ChatClient] auto-relogin after reconnect";
         login(m_myId, m_password);
@@ -348,6 +353,7 @@ void ChatClient::handleMessage(const QJsonObject &js)
         else
         {
             m_reconnectTimer->stop();
+            resetLoginState();
             emit loginFailed(js["errmsg"].toString());
         }
         break;

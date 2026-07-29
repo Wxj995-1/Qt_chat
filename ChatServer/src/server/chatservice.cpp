@@ -479,11 +479,19 @@ void ChatService::groupChat(const TcpConnectionPtr &conn, json &js, Timestamp ti
 void ChatService::handleRedisSubscribeMessage(int userid, string msg)
 {
   LOGI("redis msg: userid=%d", userid);
-  lock_guard<mutex> lock(_connMutex);
-  auto it = _userConnMap.find(userid);
-  if (it != _userConnMap.end())
+
+  TcpConnectionPtr conn;
   {
-    sendJson(it->second, json::parse(msg));
+    lock_guard<mutex> lock(_connMutex);
+    auto it = _userConnMap.find(userid);
+    if (it != _userConnMap.end())
+      conn = it->second;
+  }
+
+  if (conn)
+  {
+    // 锁外 send：避免 send 内触发 close 回调反向加锁导致死锁
+    sendJson(conn, json::parse(msg));
     return;
   }
 
