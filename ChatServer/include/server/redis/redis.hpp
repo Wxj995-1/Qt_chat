@@ -3,6 +3,9 @@
 #include <hiredis/hiredis.h>
 #include <thread>
 #include <functional>
+#include <atomic>
+#include <set>
+#include <mutex>
 using namespace std;
 
 /*
@@ -33,7 +36,13 @@ public:
     // 初始化向业务层上报通道消息的回调对象
     void init_notify_handler(function<void(int, string)> fn);
 
+    // 停止观察者线程
+    void stop();
+
 private:
+    // 重新订阅所有已注册通道（断线重连后调用）
+    bool resubscribe();
+
     // hiredis同步上下文对象，负责publish消息
     redisContext *_publish_context;
 
@@ -42,6 +51,11 @@ private:
 
     // 回调操作，收到订阅的消息，给service层上报
     function<void(int, string)> _notify_message_handler;
+
+    atomic<bool> _running{false};
+
+    mutex _channelMutex;
+    set<int> _subscribed_channels;
 };
 
 #endif
