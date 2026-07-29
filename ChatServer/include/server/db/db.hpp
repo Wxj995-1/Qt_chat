@@ -19,6 +19,8 @@ public:
   bool update(string sql);
   // 查询操作
   MYSQL_RES *query(string sql);
+  // 转义字符串防 SQL 注入
+  string escape(const string &str) const;
   // 获取连接
   MYSQL *getConnection();
 

@@ -1,4 +1,5 @@
 #include "db.hpp"
+#include <vector>
 /*
 #include <muduo/base/Logging.h>
 */
@@ -52,6 +53,15 @@ bool MySQL::connect()
     }
 
     return p;
+}
+
+// 转义字符串防 SQL 注入
+string MySQL::escape(const string &str) const
+{
+    size_t len = str.size() * 2 + 1;
+    vector<char> buf(len);
+    mysql_real_escape_string(_conn, buf.data(), str.c_str(), str.size());
+    return string(buf.data());
 }
 
 // 更新操作

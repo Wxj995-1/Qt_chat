@@ -6,14 +6,17 @@ using namespace std;
 // User表的增加方法
 bool UserModel::insert(User &user)
 {
-    // 1.组装sql语句
-    char sql[1024] = {0};
-    sprintf(sql, "insert into User(name, password, state) values('%s', '%s', '%s')",
-            user.getName().c_str(), user.getPwd().c_str(), user.getState().c_str());
-
     MySQL mysql;
     if (mysql.connect())
     {
+        string name = mysql.escape(user.getName());
+        string pwd = mysql.escape(user.getPwd());
+        string state = mysql.escape(user.getState());
+
+        char sql[1024] = {0};
+        sprintf(sql, "insert into User(name, password, state) values('%s', '%s', '%s')",
+                name.c_str(), pwd.c_str(), state.c_str());
+
         if (mysql.update(sql))
         {
             // 获取插入成功的用户数据生成的主键id
@@ -58,29 +61,28 @@ User UserModel::query(int id)
 // 更新用户的状态信息
 bool UserModel::updateState(User user)
 {
-    // 1.组装sql语句
-    char sql[1024] = {0};
-    sprintf(sql, "update User set state = '%s' where id = %d", user.getState().c_str(), user.getId());
-
     MySQL mysql;
     if (mysql.connect())
     {
+        string state = mysql.escape(user.getState());
+        char sql[1024] = {0};
+        sprintf(sql, "update User set state = '%s' where id = %d", state.c_str(), user.getId());
+
         if (mysql.update(sql))
-        {
             return true;
-        }
     }
     return false;
 }
 
 bool UserModel::updateName(int id, const string &name)
 {
-    char sql[1024] = {0};
-    sprintf(sql, "update User set name = '%s' where id = %d", name.c_str(), id);
-
     MySQL mysql;
     if (mysql.connect())
     {
+        string escaped = mysql.escape(name);
+        char sql[1024] = {0};
+        sprintf(sql, "update User set name = '%s' where id = %d", escaped.c_str(), id);
+
         if (mysql.update(sql))
             return true;
     }
