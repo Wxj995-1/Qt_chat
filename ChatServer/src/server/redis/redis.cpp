@@ -12,15 +12,20 @@ Redis::Redis()
 Redis::~Redis()
 {
     stop();
-    if (_publish_context != nullptr)
+
+    // 加锁确保 observer 线程已退出对 _subcribe_context 的访问
     {
-        redisFree(_publish_context);
-        _publish_context = nullptr;
-    }
-    if (_subcribe_context != nullptr)
-    {
-        redisFree(_subcribe_context);
-        _subcribe_context = nullptr;
+        lock_guard<mutex> lock(_subscribeMutex);
+        if (_publish_context != nullptr)
+        {
+            redisFree(_publish_context);
+            _publish_context = nullptr;
+        }
+        if (_subcribe_context != nullptr)
+        {
+            redisFree(_subcribe_context);
+            _subcribe_context = nullptr;
+        }
     }
 }
 
@@ -56,20 +61,23 @@ bool Redis::connect()
     }
 
     // 负责subscribe订阅消息的上下文连接
-    _subcribe_context = redisConnect("127.0.0.1", 6379);
-    if (_subcribe_context == nullptr || _subcribe_context->err != 0)
     {
-        if (_subcribe_context != nullptr)
+        lock_guard<mutex> lock(_subscribeMutex);
+        _subcribe_context = redisConnect("127.0.0.1", 6379);
+        if (_subcribe_context == nullptr || _subcribe_context->err != 0)
         {
-            cerr << "connect redis failed: " << _subcribe_context->errstr << endl;
-            redisFree(_subcribe_context);
-            _subcribe_context = nullptr;
+            if (_subcribe_context != nullptr)
+            {
+                cerr << "connect redis failed: " << _subcribe_context->errstr << endl;
+                redisFree(_subcribe_context);
+                _subcribe_context = nullptr;
+            }
+            else
+            {
+                cerr << "connect redis failed: can't allocate context" << endl;
+            }
+            return false;
         }
-        else
-        {
-            cerr << "connect redis failed: can't allocate context" << endl;
-        }
-        return false;
     }
 
     // 在单独的线程中，监听通道上的事件，有消息给业务层进行上报
@@ -100,22 +108,22 @@ bool Redis::publish(int channel, string message)
 // 向redis指定的通道subscribe订阅消息
 bool Redis::subscribe(int channel)
 {
-    // SUBSCRIBE命令本身会造成线程阻塞等待通道里面发生消息，这里只做订阅通道，不接收通道消息
-    // 通道消息的接收专门在observer_channel_message函数中的独立线程中进行
-    // 只负责发送命令，不阻塞接收redis server响应消息，否则和notifyMsg线程抢占响应资源
-    if (REDIS_ERR == redisAppendCommand(this->_subcribe_context, "SUBSCRIBE %d", channel))
     {
-        cerr << "subscribe command failed!" << endl;
-        return false;
-    }
-    // redisBufferWrite可以循环发送缓冲区，直到缓冲区数据发送完毕（done被置为1）
-    int done = 0;
-    while (!done)
-    {
-        if (REDIS_ERR == redisBufferWrite(this->_subcribe_context, &done))
+        lock_guard<mutex> lock(_subscribeMutex);
+
+        if (REDIS_ERR == redisAppendCommand(this->_subcribe_context, "SUBSCRIBE %d", channel))
         {
             cerr << "subscribe command failed!" << endl;
             return false;
+        }
+        int done = 0;
+        while (!done)
+        {
+            if (REDIS_ERR == redisBufferWrite(this->_subcribe_context, &done))
+            {
+                cerr << "subscribe command failed!" << endl;
+                return false;
+            }
         }
     }
 
@@ -130,19 +138,22 @@ bool Redis::subscribe(int channel)
 // 向redis指定的通道unsubscribe取消订阅消息
 bool Redis::unsubscribe(int channel)
 {
-    if (REDIS_ERR == redisAppendCommand(this->_subcribe_context, "UNSUBSCRIBE %d", channel))
     {
-        cerr << "unsubscribe command failed!" << endl;
-        return false;
-    }
-    // redisBufferWrite可以循环发送缓冲区，直到缓冲区数据发送完毕（done被置为1）
-    int done = 0;
-    while (!done)
-    {
-        if (REDIS_ERR == redisBufferWrite(this->_subcribe_context, &done))
+        lock_guard<mutex> lock(_subscribeMutex);
+
+        if (REDIS_ERR == redisAppendCommand(this->_subcribe_context, "UNSUBSCRIBE %d", channel))
         {
             cerr << "unsubscribe command failed!" << endl;
             return false;
+        }
+        int done = 0;
+        while (!done)
+        {
+            if (REDIS_ERR == redisBufferWrite(this->_subcribe_context, &done))
+            {
+                cerr << "unsubscribe command failed!" << endl;
+                return false;
+            }
         }
     }
 
@@ -160,17 +171,26 @@ void Redis::observer_channel_message()
     while (_running)
     {
         redisReply *reply = nullptr;
-        int ret = redisGetReply(this->_subcribe_context, (void **)&reply);
-        if (!_running)
-            break;
+        int ret = REDIS_ERR;
+        {
+            lock_guard<mutex> lock(_subscribeMutex);
+
+            ret = redisGetReply(this->_subcribe_context, (void **)&reply);
+            if (!_running)
+                break;
+        }
+
         if (ret != REDIS_OK)
         {
             cerr << "observer_channel_message redisGetReply failed, retrying..." << endl;
 
-            if (_subcribe_context != nullptr)
             {
-                redisFree(_subcribe_context);
-                _subcribe_context = nullptr;
+                lock_guard<mutex> lock(_subscribeMutex);
+                if (_subcribe_context != nullptr)
+                {
+                    redisFree(_subcribe_context);
+                    _subcribe_context = nullptr;
+                }
             }
 
             if (!resubscribe())
@@ -193,36 +213,40 @@ void Redis::observer_channel_message()
 
 bool Redis::resubscribe()
 {
-    if (_subcribe_context == nullptr)
     {
-        _subcribe_context = redisConnect("127.0.0.1", 6379);
-        if (_subcribe_context == nullptr || _subcribe_context->err != 0)
-        {
-            if (_subcribe_context != nullptr)
-            {
-                cerr << "resubscribe redisConnect failed: " << _subcribe_context->errstr << endl;
-                redisFree(_subcribe_context);
-                _subcribe_context = nullptr;
-            }
-            return false;
-        }
-    }
+        lock_guard<mutex> lock(_subscribeMutex);
 
-    lock_guard<mutex> lock(_channelMutex);
-    for (int ch : _subscribed_channels)
-    {
-        if (REDIS_ERR == redisAppendCommand(_subcribe_context, "SUBSCRIBE %d", ch))
+        if (_subcribe_context == nullptr)
         {
-            cerr << "resubscribe command failed for channel " << ch << endl;
-            return false;
-        }
-        int done = 0;
-        while (!done)
-        {
-            if (REDIS_ERR == redisBufferWrite(_subcribe_context, &done))
+            _subcribe_context = redisConnect("127.0.0.1", 6379);
+            if (_subcribe_context == nullptr || _subcribe_context->err != 0)
             {
-                cerr << "resubscribe bufferWrite failed for channel " << ch << endl;
+                if (_subcribe_context != nullptr)
+                {
+                    cerr << "resubscribe redisConnect failed: " << _subcribe_context->errstr << endl;
+                    redisFree(_subcribe_context);
+                    _subcribe_context = nullptr;
+                }
                 return false;
+            }
+        }
+
+        lock_guard<mutex> lock2(_channelMutex);
+        for (int ch : _subscribed_channels)
+        {
+            if (REDIS_ERR == redisAppendCommand(_subcribe_context, "SUBSCRIBE %d", ch))
+            {
+                cerr << "resubscribe command failed for channel " << ch << endl;
+                return false;
+            }
+            int done = 0;
+            while (!done)
+            {
+                if (REDIS_ERR == redisBufferWrite(_subcribe_context, &done))
+                {
+                    cerr << "resubscribe bufferWrite failed for channel " << ch << endl;
+                    return false;
+                }
             }
         }
     }

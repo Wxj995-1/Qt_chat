@@ -56,6 +56,9 @@ private:
 
     mutex _channelMutex;
     set<int> _subscribed_channels;
+
+    // 保护 _subcribe_context 的互斥锁（subscribe/unsubscribe 与 observer 线程并发访问同一 context）
+    mutex _subscribeMutex;
 };
 
 #endif
