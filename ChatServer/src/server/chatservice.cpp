@@ -68,6 +68,15 @@ MsgHandler ChatService::getHandler(int msgid)
 // 处理登录业务  id  pwd   pwd
 void ChatService::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("id") || !js.contains("password"))
+  {
+    json response;
+    response["msgid"] = LOGIN_MSG_ACK;
+    response["errno"] = 1;
+    response["errmsg"] = "invalid fields";
+    sendJson(conn, response);
+    return;
+  }
   int id = js["id"].get<int>();
   string pwd = js["password"];
 
@@ -184,6 +193,15 @@ void ChatService::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
 // 处理注册业务  name  password
 void ChatService::reg(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("name") || !js.contains("password"))
+  {
+    json response;
+    response["msgid"] = REG_MSG_ACK;
+    response["errno"] = 1;
+    response["errmsg"] = "invalid fields";
+    sendJson(conn, response);
+    return;
+  }
   string name = js["name"];
   string pwd = js["password"];
 
@@ -214,6 +232,8 @@ void ChatService::reg(const TcpConnectionPtr &conn, json &js, Timestamp time)
 // 处理注销业务
 void ChatService::loginout(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("id"))
+    return;
   int userid = js["id"].get<int>();
 
   {
@@ -279,6 +299,8 @@ void ChatService::clientCloseException(const TcpConnectionPtr &conn)
 // 一对一聊天业务
 void ChatService::oneChat(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("id") || !js.contains("toid"))
+    return;
   int toid = js["toid"].get<int>();
   int fromid = js["id"].get<int>();
 
@@ -288,7 +310,6 @@ void ChatService::oneChat(const TcpConnectionPtr &conn, json &js, Timestamp time
     if (it != _userConnMap.end())
     {
       LOGI("oneChat online: %d -> %d", fromid, toid);
-      // toid在线，转发消息   服务器主动推送消息给toid用户
       sendJson(it->second, js);
       return;
     }
@@ -311,6 +332,8 @@ void ChatService::oneChat(const TcpConnectionPtr &conn, json &js, Timestamp time
 // 添加好友业务 msgid id friendid
 void ChatService::addFriend(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("id") || !js.contains("friendid"))
+    return;
   int userid = js["id"].get<int>();
   int friendid = js["friendid"].get<int>();
 
@@ -332,6 +355,8 @@ void ChatService::addFriend(const TcpConnectionPtr &conn, json &js, Timestamp ti
 // 创建群组业务
 void ChatService::createGroup(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("id") || !js.contains("groupname"))
+    return;
   int userid = js["id"].get<int>();
   string name = js["groupname"];
   string desc = js["groupdesc"];
@@ -357,6 +382,8 @@ void ChatService::createGroup(const TcpConnectionPtr &conn, json &js, Timestamp 
 // 加入群组业务
 void ChatService::addGroup(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("id") || !js.contains("groupid"))
+    return;
   int userid = js["id"].get<int>();
   int groupid = js["groupid"].get<int>();
   _groupModel.addGroup(userid, groupid, "normal");
@@ -375,6 +402,8 @@ void ChatService::addGroup(const TcpConnectionPtr &conn, json &js, Timestamp tim
 // 修改名字业务
 void ChatService::updateName(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("id") || !js.contains("name"))
+    return;
   int userid = js["id"].get<int>();
   string newName = js["name"];
 
@@ -399,6 +428,8 @@ void ChatService::updateName(const TcpConnectionPtr &conn, json &js, Timestamp t
 // 群组聊天业务
 void ChatService::groupChat(const TcpConnectionPtr &conn, json &js, Timestamp time)
 {
+  if (!js.contains("id") || !js.contains("groupid"))
+    return;
   int userid = js["id"].get<int>();
   int groupid = js["groupid"].get<int>();
   vector<int> useridVec = _groupModel.queryGroupUsers(userid, groupid);

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <arpa/inet.h>
 #include "json.hpp"
+#include "AsyncLog.hpp"
 #include "public.hpp"
 #include "chatserver.hpp"
 #include "chatservice.hpp"
@@ -45,7 +46,7 @@ void ChatServer::onMessage(const TcpConnectionPtr &conn, Buffer *buffer, Timesta
 {
   while (buffer->readableBytes() >= 4)
   {
-    uint32_t totalLen = ntohl(*(uint32_t*)buffer->peek());
+    uint32_t totalLen = ntohl(*(uint32_t *)buffer->peek());
     if (totalLen > 1024 * 1024 || totalLen == 0)
     {
       buffer->retrieveAll();
@@ -58,9 +59,24 @@ void ChatServer::onMessage(const TcpConnectionPtr &conn, Buffer *buffer, Timesta
     string msg(buffer->peek(), totalLen);
     buffer->retrieve(totalLen);
 
-    json js = json::parse(msg);
-    ChatService::instance()->updateConnTime(conn);
-    auto msgHandler = ChatService::instance()->getHandler(js["msgid"].get<int>());
-    msgHandler(conn, js, time);
+    try
+    {
+      json js = json::parse(msg);
+      ChatService::instance()->updateConnTime(conn);
+      auto msgHandler = ChatService::instance()->getHandler(js["msgid"].get<int>());
+      msgHandler(conn, js, time);
+    }
+    catch (json::parse_error &e)
+    {
+      LOGE("JSON parse error: %s, msg=%s", e.what(), msg.c_str());
+    }
+    catch (json::exception &e)
+    {
+      LOGE("JSON exception: %s, msg=%s", e.what(), msg.c_str());
+    }
+    catch (std::exception &e)
+    {
+      LOGE("Unknown exception: %s, msg=%s", e.what(), msg.c_str());
+    }
   }
 }
