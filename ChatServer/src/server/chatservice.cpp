@@ -304,15 +304,19 @@ void ChatService::oneChat(const TcpConnectionPtr &conn, json &js, Timestamp time
   int toid = js["toid"].get<int>();
   int fromid = js["id"].get<int>();
 
+  TcpConnectionPtr toConn;
   {
     lock_guard<mutex> lock(_connMutex);
     auto it = _userConnMap.find(toid);
     if (it != _userConnMap.end())
-    {
-      LOGI("oneChat online: %d -> %d", fromid, toid);
-      sendJson(it->second, js);
-      return;
-    }
+      toConn = it->second;
+  }
+
+  if (toConn)
+  {
+    LOGI("oneChat online: %d -> %d", fromid, toid);
+    sendJson(toConn, js);
+    return;
   }
 
   // 查询toid是否在线
