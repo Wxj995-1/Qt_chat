@@ -264,6 +264,7 @@ void ChatClient::onReadyRead()
             *reinterpret_cast<const uint32_t*>(m_recvBuf.constData()));
         if (len == 0 || len > 1024 * 1024) {
             m_recvBuf.clear();
+            m_socket->abort();
             break;
         }
         if (m_recvBuf.size() < 4 + len)
