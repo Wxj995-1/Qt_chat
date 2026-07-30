@@ -95,6 +95,9 @@ bool Redis::connect()
 // 向redis指定的通道channel发布消息
 bool Redis::publish(int channel, string message)
 {
+    if (_publish_context == nullptr || _publish_context->err != 0)
+        return false;
+
     redisReply *reply = (redisReply *)redisCommand(_publish_context, "PUBLISH %d %s", channel, message.c_str());
     if (nullptr == reply)
     {
@@ -108,6 +111,9 @@ bool Redis::publish(int channel, string message)
 // 向redis指定的通道subscribe订阅消息
 bool Redis::subscribe(int channel)
 {
+    if (_subcribe_context == nullptr || _subcribe_context->err != 0)
+        return false;
+
     {
         lock_guard<mutex> lock(_subscribeMutex);
 
@@ -138,6 +144,9 @@ bool Redis::subscribe(int channel)
 // 向redis指定的通道unsubscribe取消订阅消息
 bool Redis::unsubscribe(int channel)
 {
+    if (_subcribe_context == nullptr || _subcribe_context->err != 0)
+        return false;
+
     {
         lock_guard<mutex> lock(_subscribeMutex);
 
