@@ -86,6 +86,7 @@ void ChatClient::sendJson(const QJsonObject &obj)
 void ChatClient::login(int id, const QString &pwd)
 {
     qDebug() << "[ChatClient] login - id:" << id;
+    m_intentionalDisconnect = false;
     m_myId = id;
     m_password = pwd;
     m_wantRelogin = true;
@@ -169,6 +170,8 @@ void ChatClient::updateName(int id, const QString &newName)
 
 void ChatClient::loginout()
 {
+    if (m_intentionalDisconnect)
+        return;
     m_intentionalDisconnect = true;
     m_wantRelogin = false;
     m_reconnectTimer->stop();
@@ -337,9 +340,11 @@ void ChatClient::handleMessage(const QJsonObject &js)
     case LOGIN_MSG_ACK:
     {
         m_loginTimeoutTimer->stop();
+        if (!js.contains("errno")) break;
         int errno_ = js["errno"].toInt();
         if (errno_ == 0)
         {
+            if (!js.contains("id") || !js.contains("name")) break;
             m_myId = js["id"].toInt();
             m_myName = js["name"].toString();
             QJsonArray friends = js["friends"].toArray();

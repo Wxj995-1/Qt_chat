@@ -82,6 +82,7 @@ int main(int argc, char *argv[])
   logFileFullPath = absLogDir;
 
   const char *logfilename = config.getConfigName("logfilename");
+  if (logfilename == NULL) logfilename = "chatserver";
   logFileFullPath += logfilename;
 
   CAsyncLog::init(logFileFullPath.c_str());
@@ -101,7 +102,10 @@ int main(int argc, char *argv[])
   g_loop = &loop;
 
   const char *serverip = config.getConfigName("serverip");
-  short serverport = (short)atol(config.getConfigName("serverport"));
+  if (serverip == NULL) { LOGF("serverip not set in config file"); return 1; }
+  const char *portstr = config.getConfigName("serverport");
+  if (portstr == NULL) { LOGF("serverport not set in config file"); return 1; }
+  short serverport = (short)atol(portstr);
 
   if (argc == 3)
   {
