@@ -1,7 +1,6 @@
 #include "offlinemessagemodel.hpp"
 #include "db.hpp"
 #include <cstdio>
-#include <vector>
 
 // 存储用户的离线消息
 void OfflineMsgModel::insert(int userid, string msg)
@@ -10,15 +9,12 @@ void OfflineMsgModel::insert(int userid, string msg)
     if (!mysql.connect())
         return;
 
-    size_t escapedLen = msg.size() * 2 + 1;
-    vector<char> escaped(escapedLen);
-    mysql_real_escape_string(mysql.getConnection(), escaped.data(), msg.c_str(), msg.size());
+    string escaped = mysql.escape(msg);
+    char sql[2048] = {0};
+    snprintf(sql, sizeof(sql), "insert into OfflineMessage values(%d, '%s')",
+             userid, escaped.c_str());
 
-    size_t sqlLen = msg.size() * 2 + 120;
-    vector<char> sql(sqlLen, 0);
-    snprintf(sql.data(), sqlLen, "insert into OfflineMessage values(%d, '%s')", userid, escaped.data());
-
-    mysql.update(string(sql.data()));
+    mysql.update(sql);
 }
 
 // 删除用户的离线消息
