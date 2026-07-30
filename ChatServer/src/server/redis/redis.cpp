@@ -12,20 +12,18 @@ Redis::Redis()
 Redis::~Redis()
 {
     stop();
+    if (_observerThread.joinable())
+        _observerThread.join();
 
-    // 加锁确保 observer 线程已退出对 _subcribe_context 的访问
+    if (_publish_context != nullptr)
     {
-        lock_guard<mutex> lock(_subscribeMutex);
-        if (_publish_context != nullptr)
-        {
-            redisFree(_publish_context);
-            _publish_context = nullptr;
-        }
-        if (_subcribe_context != nullptr)
-        {
-            redisFree(_subcribe_context);
-            _subcribe_context = nullptr;
-        }
+        redisFree(_publish_context);
+        _publish_context = nullptr;
+    }
+    if (_subcribe_context != nullptr)
+    {
+        redisFree(_subcribe_context);
+        _subcribe_context = nullptr;
     }
 }
 
@@ -81,11 +79,12 @@ bool Redis::connect()
     }
 
     // 在单独的线程中，监听通道上的事件，有消息给业务层进行上报
+    if (_observerThread.joinable())
+        _observerThread.join();
     _running = true;
-    thread t([&]() {
+    _observerThread = thread([this]() {
         observer_channel_message();
     });
-    t.detach();
 
     cout << "connect redis-server success!" << endl;
 
@@ -204,7 +203,11 @@ void Redis::observer_channel_message()
             continue;
         }
 
-        if (reply != nullptr && reply->element[2] != nullptr && reply->element[2]->str != nullptr)
+        if (reply != nullptr
+            && reply->type == REDIS_REPLY_ARRAY
+            && reply->elements >= 3
+            && reply->element[2] != nullptr
+            && reply->element[2]->str != nullptr)
         {
             _notify_message_handler(atoi(reply->element[1]->str), reply->element[2]->str);
         }
