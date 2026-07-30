@@ -61,7 +61,7 @@ MsgHandler ChatService::getHandler(int msgid)
   }
   else
   {
-    return _msgHandlerMap[msgid];
+    return it->second;
   }
 }
 
