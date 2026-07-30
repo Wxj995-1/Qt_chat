@@ -522,6 +522,7 @@ void ChatService::notifyFriendState(int userid, const string &state)
   notify["friendid"] = userid;
   notify["state"] = state;
 
+  vector<TcpConnectionPtr> onlineConns;
   vector<int> crossIds;
   {
     lock_guard<mutex> lock(_connMutex);
@@ -531,7 +532,7 @@ void ChatService::notifyFriendState(int userid, const string &state)
       auto it = _userConnMap.find(fid);
       if (it != _userConnMap.end())
       {
-        sendJson(it->second, notify);
+        onlineConns.push_back(it->second);
       }
       else
       {
@@ -539,6 +540,9 @@ void ChatService::notifyFriendState(int userid, const string &state)
       }
     }
   }
+
+  for (auto &conn : onlineConns)
+    sendJson(conn, notify);
 
   // 通知跨服好友（发布到 Redis 通道，由对方服务器转发）
   for (int fid : crossIds)
