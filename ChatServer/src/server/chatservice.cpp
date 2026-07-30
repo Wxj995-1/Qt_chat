@@ -490,8 +490,14 @@ void ChatService::handleRedisSubscribeMessage(int userid, string msg)
 
   if (conn)
   {
-    // 锁外 send：避免 send 内触发 close 回调反向加锁导致死锁
-    sendJson(conn, json::parse(msg));
+    try
+    {
+      sendJson(conn, json::parse(msg));
+    }
+    catch (const json::exception &e)
+    {
+      LOGE("redis online msg parse error, userid=%d: %s", userid, e.what());
+    }
     return;
   }
 
