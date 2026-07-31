@@ -103,6 +103,12 @@ bool Redis::publish(int channel, string message)
         cerr << "publish command failed!" << endl;
         return false;
     }
+    if (reply->type == REDIS_REPLY_ERROR)
+    {
+        cerr << "publish error: " << reply->str << endl;
+        freeReplyObject(reply);
+        return false;
+    }
     freeReplyObject(reply);
     return true;
 }

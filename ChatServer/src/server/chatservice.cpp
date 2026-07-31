@@ -570,7 +570,7 @@ void ChatService::sendJson(const TcpConnectionPtr &conn, const json &js)
 void ChatService::updateConnTime(const TcpConnectionPtr &conn)
 {
   lock_guard<mutex> lock(_connMutex);
-  _connectionLastTime[conn->name()] = time(NULL);
+  _connectionLastTime[conn->name()] = {time(NULL), conn};
 }
 
 void ChatService::heartbeat(const TcpConnectionPtr &conn, json &js, Timestamp time)
@@ -602,17 +602,8 @@ void ChatService::checkHeartbeat()
     time_t now = time(NULL);
     for (auto &kv : _connectionLastTime)
     {
-      if (now - kv.second > 30)
-      {
-        for (auto &uc : _userConnMap)
-        {
-          if (uc.second->name() == kv.first)
-          {
-            toClose.push_back(uc.second);
-            break;
-          }
-        }
-      }
+      if (now - kv.second.first > 30)
+        toClose.push_back(kv.second.second);
     }
   }
 

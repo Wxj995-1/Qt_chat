@@ -58,7 +58,7 @@ private:
   unordered_map<int, TcpConnectionPtr> _userConnMap;
   mutex _connMutex;
 
-  unordered_map<string, time_t> _connectionLastTime;
+  unordered_map<string, pair<time_t, TcpConnectionPtr>> _connectionLastTime;
 
   UserModel _userModel;
   OfflineMsgModel _offlineMsgModel;
