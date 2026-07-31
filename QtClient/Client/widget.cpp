@@ -21,28 +21,25 @@ Widget::Widget(ChatClient *client, int myId, const QString &name,
     resize(860, 600);
     setMinimumSize(720, 400);
 
-    // Split offline messages and count unread per friend/group
+    // Merge offline messages into history and count unread per friend/group
+    for (int i = 0; i < offlineMsgs.size(); ++i)
     {
-        QJsonArray friendArr, groupArr;
-        for (int i = 0; i < offlineMsgs.size(); ++i)
+        QJsonObject obj = QJsonDocument::fromJson(offlineMsgs[i].toString().toUtf8()).object();
+        int msgid = obj["msgid"].toInt();
+        if (msgid == ONE_CHAT_MSG)
         {
-            QJsonObject obj = QJsonDocument::fromJson(offlineMsgs[i].toString().toUtf8()).object();
-            int msgid = obj["msgid"].toInt();
-            if (msgid == ONE_CHAT_MSG)
-            {
-                friendArr.append(offlineMsgs[i]);
-                int fromid = obj["id"].toInt();
-                m_unreadFriend[fromid] = m_unreadFriend.value(fromid, 0) + 1;
-            }
-            else if (msgid == GROUP_CHAT_MSG)
-            {
-                groupArr.append(offlineMsgs[i]);
-                int groupid = obj["groupid"].toInt();
-                m_unreadGroup[groupid] = m_unreadGroup.value(groupid, 0) + 1;
-            }
+            int fromid = obj["id"].toInt();
+            appendToHistory(fromid, false, {false, obj["name"].toString(),
+                                            obj["time"].toString(), obj["msg"].toString()});
+            m_unreadFriend[fromid] = m_unreadFriend.value(fromid, 0) + 1;
         }
-        m_friendOfflineMsgs = friendArr;
-        m_groupOfflineMsgs = groupArr;
+        else if (msgid == GROUP_CHAT_MSG)
+        {
+            int groupid = obj["groupid"].toInt();
+            appendToHistory(groupid, true, {false, obj["name"].toString(),
+                                            obj["time"].toString(), obj["msg"].toString()});
+            m_unreadGroup[groupid] = m_unreadGroup.value(groupid, 0) + 1;
+        }
     }
 
     setupUI();
@@ -74,22 +71,22 @@ Widget::Widget(ChatClient *client, int myId, const QString &name,
     connect(m_client, &ChatClient::disconnected, this, [this]() { setStatus(false); });
     connect(m_client, &ChatClient::loginSuccess, this, [this](int, const QString&, const QJsonArray&, const QJsonArray&, const QJsonArray& offlineMsgs) {
         setStatus(true);
-        int friendStart = m_friendOfflineMsgs.size();
-        int groupStart = m_groupOfflineMsgs.size();
         for (int i = 0; i < offlineMsgs.size(); ++i)
         {
             QJsonObject obj = QJsonDocument::fromJson(offlineMsgs[i].toString().toUtf8()).object();
             int msgid = obj["msgid"].toInt();
             if (msgid == ONE_CHAT_MSG)
             {
-                m_friendOfflineMsgs.append(offlineMsgs[i]);
                 int fromid = obj["id"].toInt();
+                appendToHistory(fromid, false, {false, obj["name"].toString(),
+                                                obj["time"].toString(), obj["msg"].toString()});
                 m_unreadFriend[fromid] = m_unreadFriend.value(fromid, 0) + 1;
             }
             else if (msgid == GROUP_CHAT_MSG)
             {
-                m_groupOfflineMsgs.append(offlineMsgs[i]);
                 int groupid = obj["groupid"].toInt();
+                appendToHistory(groupid, true, {false, obj["name"].toString(),
+                                                obj["time"].toString(), obj["msg"].toString()});
                 m_unreadGroup[groupid] = m_unreadGroup.value(groupid, 0) + 1;
             }
         }
@@ -97,17 +94,17 @@ Widget::Widget(ChatClient *client, int myId, const QString &name,
             updateFriendBadge(it.key());
         for (auto it = m_unreadGroup.begin(); it != m_unreadGroup.end(); ++it)
             updateGroupBadge(it.key());
+        // Replay new offline messages if current window matches
         if (m_currentTargetId != -1)
         {
-            QJsonArray &arr = m_currentIsGroup ? m_groupOfflineMsgs : m_friendOfflineMsgs;
-            int start = m_currentIsGroup ? groupStart : friendStart;
-            for (int i = start; i < arr.size(); ++i)
+            for (int i = 0; i < offlineMsgs.size(); ++i)
             {
-                QJsonObject obj = QJsonDocument::fromJson(arr[i].toString().toUtf8()).object();
-                int matchId = m_currentIsGroup ? obj["groupid"].toInt() : obj["id"].toInt();
-                if (matchId != m_currentTargetId)
-                    continue;
-                addMessage(false, obj["name"].toString(), obj["time"].toString(), obj["msg"].toString());
+                QJsonObject obj = QJsonDocument::fromJson(offlineMsgs[i].toString().toUtf8()).object();
+                int msgid = obj["msgid"].toInt();
+                bool isGroup = (msgid == GROUP_CHAT_MSG);
+                int matchId = isGroup ? obj["groupid"].toInt() : obj["id"].toInt();
+                if (isGroup == m_currentIsGroup && matchId == m_currentTargetId)
+                    addMessage(false, obj["name"].toString(), obj["time"].toString(), obj["msg"].toString());
             }
         }
     });
@@ -338,6 +335,7 @@ void Widget::onSendClicked()
         m_client->groupChat(m_currentTargetId, text);
 
     addMessage(true, "", time, text);
+    appendToHistory(m_currentTargetId, m_currentIsGroup, {true, "", time, text});
 
     m_msgInput->clear();
 }
@@ -345,14 +343,14 @@ void Widget::onSendClicked()
 void Widget::onChatMsg(int fromid, const QString &name,
                        const QString &msg, const QString &time)
 {
+    appendToHistory(fromid, false, {false, name, time, msg});
+
     if (fromid == m_currentTargetId && !m_currentIsGroup)
     {
         addMessage(false, name, time, msg);
     }
     else
     {
-        ChatMsg cm{false, name, time, msg};
-        m_pendingFriendMsgs[fromid].append(cm);
         m_unreadFriend[fromid] = m_unreadFriend.value(fromid, 0) + 1;
         updateFriendBadge(fromid);
     }
@@ -364,14 +362,14 @@ void Widget::onGroupMsg(int groupid, int fromid, const QString &name,
     if (fromid == m_myId)
         return;
 
+    appendToHistory(groupid, true, {false, name, time, msg});
+
     if (groupid == m_currentTargetId && m_currentIsGroup)
     {
         addMessage(false, name, time, msg);
     }
     else
     {
-        ChatMsg cm{false, name, time, msg};
-        m_pendingGroupMsgs[groupid].append(cm);
         m_unreadGroup[groupid] = m_unreadGroup.value(groupid, 0) + 1;
         updateGroupBadge(groupid);
     }
@@ -512,38 +510,8 @@ void Widget::switchToTarget(int targetId, bool isGroup, const QString &displayNa
     m_chatLayout->addStretch();
     m_msgInput->setFocus();
 
-    showTargetOfflineMsgs(targetId, isGroup);
-
-    // Flush pending messages that arrived while chatting elsewhere
-    if (isGroup)
-    {
-        QVector<ChatMsg> &msgs = m_pendingGroupMsgs[targetId];
-        for (const ChatMsg &cm : msgs)
-            addMessage(cm.isRight, cm.name, cm.time, cm.text);
-        msgs.clear();
-    }
-    else
-    {
-        QVector<ChatMsg> &msgs = m_pendingFriendMsgs[targetId];
-        for (const ChatMsg &cm : msgs)
-            addMessage(cm.isRight, cm.name, cm.time, cm.text);
-        msgs.clear();
-    }
-}
-
-void Widget::showTargetOfflineMsgs(int targetId, bool isGroup)
-{
-    QJsonArray &arr = isGroup ? m_groupOfflineMsgs : m_friendOfflineMsgs;
-
-    for (int i = 0; i < arr.size(); ++i)
-    {
-        QJsonObject obj = QJsonDocument::fromJson(arr[i].toString().toUtf8()).object();
-        int matchId = isGroup ? obj["groupid"].toInt() : obj["id"].toInt();
-        if (matchId != targetId)
-            continue;
-
-        addMessage(false, obj["name"].toString(), obj["time"].toString(), obj["msg"].toString());
-    }
+    // Replay complete history for this target
+    rebuildChatFromHistory(targetId, isGroup);
 }
 
 void Widget::setStatus(bool online)
@@ -690,6 +658,25 @@ void Widget::onGroupJoined(int groupId, const QString &groupName)
 }
 
 // ==================== UI helpers ====================
+
+void Widget::appendToHistory(int targetId, bool isGroup, const ChatMsg &cm)
+{
+    QVector<ChatMsg> &hist = isGroup
+        ? m_groupMsgHistory[targetId]
+        : m_friendMsgHistory[targetId];
+    hist.append(cm);
+    if (hist.size() > 500)
+        hist.removeFirst();   // 丢弃最早消息，保持上限
+}
+
+void Widget::rebuildChatFromHistory(int targetId, bool isGroup)
+{
+    const QVector<ChatMsg> &hist = isGroup
+        ? m_groupMsgHistory[targetId]
+        : m_friendMsgHistory[targetId];
+    for (const ChatMsg &cm : hist)
+        addMessage(cm.isRight, cm.name, cm.time, cm.text);
+}
 
 void Widget::addMessage(bool isRight, const QString &name,
                         const QString &time, const QString &text)

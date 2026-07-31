@@ -107,10 +107,11 @@ private:
     void setupUI();
     void setupStyle();
     void addMessage(bool isRight, const QString &name, const QString &time, const QString &text);
+    void appendToHistory(int targetId, bool isGroup, const ChatMsg &cm);
+    void rebuildChatFromHistory(int targetId, bool isGroup);
     void loadFriends(const QJsonArray &friends);
     void loadGroups(const QJsonArray &groups);
     void switchToTarget(int targetId, bool isGroup, const QString &displayName);
-    void showTargetOfflineMsgs(int targetId, bool isGroup);
     void setStatus(bool online);
     void toggleStatus();
     void updateFriendBadge(int friendId);
@@ -125,12 +126,10 @@ private:
     QString m_currentTargetName;
     bool m_currentIsGroup = false;
     bool m_online = true;
-    QJsonArray m_friendOfflineMsgs;
-    QJsonArray m_groupOfflineMsgs;
     QMap<int, int> m_unreadFriend;
     QMap<int, int> m_unreadGroup;
-    QMap<int, QVector<ChatMsg>> m_pendingFriendMsgs;
-    QMap<int, QVector<ChatMsg>> m_pendingGroupMsgs;
+    QMap<int, QVector<ChatMsg>> m_friendMsgHistory;
+    QMap<int, QVector<ChatMsg>> m_groupMsgHistory;
 
     // Left panel
     QWidget *m_leftPanel;
