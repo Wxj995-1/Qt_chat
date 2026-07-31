@@ -124,8 +124,6 @@ void ChatService::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
       if (!vec.empty())
       {
         response["offlinemsg"] = vec;
-        // 读取该用户的离线消息后，把该用户的所有离线消息删除掉
-        _offlineMsgModel.remove(id);
       }
 
       // 查询该用户的好友信息并返回
@@ -174,6 +172,11 @@ void ChatService::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
       }
 
       sendJson(conn, response);
+      // 发送成功后删除离线消息，避免连接断开时丢失（宁重勿丢）
+      if (!vec.empty())
+      {
+        _offlineMsgModel.remove(id);
+      }
       // 通知好友该用户上线
       notifyFriendState(id, "online");
     }
