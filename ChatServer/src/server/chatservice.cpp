@@ -86,29 +86,29 @@ void ChatService::login(const TcpConnectionPtr &conn, json &js, Timestamp time)
     if (user.getState() == "online")
     {
       LOGI("user already online, force relogin: id=%d", id);
-      // 强制踢掉旧连接
+      // 大锁覆盖踢人四步：踢旧连接 → 注册新连接 → unsubscribe → subscribe
+      lock_guard<mutex> lock(_connMutex);
+      auto it = _userConnMap.find(id);
+      if (it != _userConnMap.end())
       {
-        lock_guard<mutex> lock(_connMutex);
-        auto it = _userConnMap.find(id);
-        if (it != _userConnMap.end())
-        {
-          it->second->shutdown();
-          _userConnMap.erase(it);
-        }
+        it->second->shutdown();
+        _userConnMap.erase(it);
       }
+      _userConnMap[id] = conn;
       _redis.unsubscribe(id);
+      _redis.subscribe(id);
     }
+    else
+    {
+      lock_guard<mutex> lock(_connMutex);
+      _userConnMap[id] = conn;
+    }
+
+    if (user.getState() != "online")
+      _redis.subscribe(id);
 
     {
       LOGI("user login: id=%d", id);
-      // 登录成功，记录用户连接信息
-      {
-        lock_guard<mutex> lock(_connMutex);
-        _userConnMap.insert({id, conn});
-      }
-
-      // id用户登录成功后，向redis订阅channel(id)
-      _redis.subscribe(id);
 
       // 登录成功，更新用户状态信息 state offline=>online
       user.setState("online");

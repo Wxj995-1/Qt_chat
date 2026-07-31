@@ -1,6 +1,8 @@
 #include "redis.hpp"
 #include <iostream>
 #include <chrono>
+#include <poll.h>
+#include <cstring>
 #include <sys/socket.h>
 using namespace std;
 
@@ -184,10 +186,40 @@ void Redis::observer_channel_message()
 {
     while (_running)
     {
-        redisReply *reply = nullptr;
-        int ret = redisGetReply(this->_subcribe_context, (void **)&reply);
+        if (_subcribe_context == nullptr)
+        {
+            if (!resubscribe())
+                this_thread::sleep_for(chrono::seconds(3));
+            continue;
+        }
+
+        // poll 等待数据可读，避免 redisGetReply 长时间阻塞持锁
+        struct pollfd pfd;
+        pfd.fd = _subcribe_context->fd;
+        pfd.events = POLLIN;
+        int pr = poll(&pfd, 1, 1000);
         if (!_running)
             break;
+        if (pr <= 0)
+            continue;
+        if (!(pfd.revents & POLLIN))
+            continue;
+
+        redisReply *reply = nullptr;
+        int ret;
+        {
+            // 仅 redisGetReply 短锁：poll 已确认数据就绪，不会长时间阻塞
+            lock_guard<mutex> lock(_subscribeMutex);
+            if (_subcribe_context == nullptr)
+                continue;
+            ret = redisGetReply(_subcribe_context, (void **)&reply);
+        }
+        if (!_running)
+        {
+            if (reply != nullptr)
+                freeReplyObject(reply);
+            break;
+        }
 
         if (ret != REDIS_OK)
         {
@@ -201,24 +233,24 @@ void Redis::observer_channel_message()
                     _subcribe_context = nullptr;
                 }
             }
-
-            if (!resubscribe())
-            {
-                this_thread::sleep_for(chrono::seconds(3));
-            }
             continue;
         }
 
-        if (reply != nullptr
-            && reply->type == REDIS_REPLY_ARRAY
-            && reply->elements >= 3
-            && reply->element[2] != nullptr
-            && reply->element[2]->str != nullptr)
+        if (reply != nullptr)
         {
-            _notify_message_handler(atoi(reply->element[1]->str), reply->element[2]->str);
+            // 仅处理真正的 message 推送，忽略 subscribe/unsubscribe 确认
+            if (reply->type == REDIS_REPLY_ARRAY
+                && reply->elements >= 3
+                && reply->element[0] != nullptr
+                && reply->element[0]->str != nullptr
+                && strcmp(reply->element[0]->str, "message") == 0
+                && reply->element[2] != nullptr
+                && reply->element[2]->str != nullptr)
+            {
+                _notify_message_handler(atoi(reply->element[1]->str), reply->element[2]->str);
+            }
+            freeReplyObject(reply);
         }
-
-        freeReplyObject(reply);
     }
 
     cerr << "observer_channel_message quit" << endl;
