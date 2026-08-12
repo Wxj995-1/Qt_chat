@@ -2,7 +2,7 @@
 #include "AsyncLog.hpp"
 #include "chatservice.hpp"
 #include "ConfigFileReader.hpp"
-#include "db.hpp"
+#include "dbpool.hpp"
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -96,7 +96,17 @@ int main(int argc, char *argv[])
     LOGF("mysql config is not set in config file");
     return 1;
   }
-  MySQL::setConfig(dbserver, dbuser, dbpassword, dbname);
+
+  const char *poolsize = config.getConfigName("dbpoolsize");
+  int dbPoolSize = poolsize ? atoi(poolsize) : 8;
+  const char *maxpoolsize = config.getConfigName("dbmaxpoolsize");
+  int dbMaxPoolSize = maxpoolsize ? atoi(maxpoolsize) : 16;
+
+  if (!DbPool::instance().init(dbserver, dbuser, dbpassword, dbname, dbPoolSize, dbMaxPoolSize))
+  {
+    LOGF("DbPool init failed");
+    return 1;
+  }
 
   EventLoop loop;
   g_loop = &loop;
@@ -124,9 +134,13 @@ int main(int argc, char *argv[])
 
   server.start();
   ChatService::instance()->startHeartbeatCheck(&loop);
+  loop.runEvery(10.0, []() {
+    DbPool::instance().checkStaleConnections();
+  });
   loop.loop();
 
   ChatService::instance()->reset();
+  DbPool::instance().shutdown();
   CAsyncLog::uninit();
   return 0;
 }

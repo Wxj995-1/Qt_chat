@@ -34,11 +34,18 @@ void MySQL::setConfig(const string &srv, const string &usr,
     dbname_ = db;
 }
 
-// 连接数据库
+// 连接数据库（使用 setConfig 设置的全局配置）
 bool MySQL::connect()
 {
-    MYSQL *p = mysql_real_connect(_conn, server_.c_str(), user_.c_str(),
-                                  password_.c_str(), dbname_.c_str(), 3306, nullptr, 0);
+    return connect(server_, user_, password_, dbname_);
+}
+
+// 连接数据库（显式指定配置，连接池用）
+bool MySQL::connect(const string &srv, const string &usr,
+                    const string &pwd, const string &db)
+{
+    MYSQL *p = mysql_real_connect(_conn, srv.c_str(), usr.c_str(),
+                                  pwd.c_str(), db.c_str(), 3306, nullptr, 0);
     if (p != nullptr)
     {
         // C和C++代码默认的编码字符是ASCII，如果不设置，从MySQL上拉下来的中文显示？
@@ -88,10 +95,4 @@ MYSQL_RES *MySQL::query(string sql)
     }
 
     return mysql_store_result(_conn);
-}
-
-// 获取连接
-MYSQL *MySQL::getConnection()
-{
-    return _conn;
 }
